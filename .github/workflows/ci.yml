@@ -48,6 +48,10 @@ jobs:
         env:
           CHROMIUM_PATH: /usr/bin/google-chrome
         run: node scripts/interaction-qa.mjs
+      - name: Administrator login regression
+        env:
+          CHROMIUM_PATH: /usr/bin/google-chrome
+        run: node scripts/admin-qa.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:

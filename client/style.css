@@ -4308,3 +4308,35 @@ button:not(:disabled):active {
     0 3px 20px #8c40d125,
     inset 0 1px #ffffff25;
 }
+.admin-entry {
+  min-height: 100dvh;
+  max-width: none;
+  padding: 30px 18px;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(ellipse at top, #56298030, transparent 65%), #09090f;
+}
+.admin-login {
+  width: min(100%, 440px);
+  padding: 32px;
+  text-align: center;
+}
+.admin-login h1 {
+  font-size: 26px;
+  margin: 18px 0 12px;
+}
+.admin-login .modal-emblem svg {
+  margin: auto;
+}
+.admin-login form {
+  text-align: left;
+  margin-top: 25px;
+}
+.admin-login form .primary {
+  width: 100%;
+  margin-top: 12px;
+}
+.admin-login > .text-button {
+  margin-top: 20px;
+}

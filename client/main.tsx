@@ -52,7 +52,9 @@ type Page =
   | "tournaments"
   | "admin";
 function App() {
-  const [page, setPage] = useState<Page>("home"),
+  const [page, setPage] = useState<Page>(
+      location.pathname.replace(/\/$/, "") === "/admin" ? "admin" : "home",
+    ),
     [me, setMe] = useState<any>(null),
     [authMode, setAuthMode] = useState(""),
     [toast, setToast] = useState(""),
@@ -103,6 +105,7 @@ function App() {
   }, [effects, sound, reduced]);
   const navigate = (p: Page) => {
     setPage(p);
+    history.replaceState(null, "", p === "admin" ? "/admin" : "/");
     setGame(null);
     window.scrollTo({ top: 0, behavior: "instant" });
   };
@@ -147,6 +150,14 @@ function App() {
       (g.name.toLowerCase().includes(query.toLowerCase()) ||
         g.desc.toLowerCase().includes(query.toLowerCase())),
   );
+  if (page === "admin" && (loading || me?.role !== "ADMIN"))
+    return (
+      <AdminEntry
+        loading={loading}
+        refresh={refresh}
+        onBack={() => navigate("home")}
+      />
+    );
   return (
     <div className="app">
       <aside className="sidebar">
@@ -723,6 +734,79 @@ function App() {
         )}
       </AnimatePresence>
     </div>
+  );
+}
+function AdminEntry({ loading, refresh, onBack }: any) {
+  const [login, setLogin] = useState(""),
+    [password, setPassword] = useState(""),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState("");
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      await api("/auth/admin/login", { login, password });
+      setPassword("");
+      await refresh();
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <main className="admin-entry">
+      <div className="panel admin-login">
+        <span className="modal-emblem">
+          <Shield size={38} />
+        </span>
+        <span className="kicker">NEON CASINO · ADMIN</span>
+        <h1>Вход администратора</h1>
+        <p className="muted">Защищённый доступ к управлению платформой</p>
+        {loading ? (
+          <p role="status">Проверяем сессию…</p>
+        ) : (
+          <form onSubmit={submit}>
+            <label>
+              Логин
+              <input
+                autoFocus
+                autoComplete="username"
+                required
+                maxLength={20}
+                value={login}
+                onChange={(e) => setLogin(e.target.value)}
+              />
+            </label>
+            <label>
+              Пароль
+              <input
+                autoComplete="current-password"
+                type="password"
+                required
+                maxLength={128}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </label>
+            {error && (
+              <p role="alert" className="error">
+                {error}
+              </p>
+            )}
+            <button className="primary" disabled={busy}>
+              {busy ? "Проверяем…" : "Войти в админ-панель"}
+              <Shield size={16} />
+            </button>
+          </form>
+        )}
+        <button className="text-button" onClick={onBack}>
+          ← На сайт
+        </button>
+      </div>
+    </main>
   );
 }
 function PageTitle({

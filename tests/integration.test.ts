@@ -277,6 +277,65 @@ else {
       400,
     );
   });
+  test("dedicated admin login, bootstrap isolation and password rotation", async () => {
+    const { bootstrapAdmin } = await import("../server/admin-bootstrap.js");
+    const login = "AdminFixture",
+      password = "fixture-admin-password-123456";
+    await assert.rejects(bootstrapAdmin({ login: "NeonAlice", password }));
+    assert.equal(
+      (await db.user.findUniqueOrThrow({ where: { id: aid } })).role,
+      "USER",
+    );
+    const owner = await bootstrapAdmin({ login, password });
+    assert.ok(owner);
+    assert.notEqual(owner.passwordHash, password);
+    await bootstrapAdmin({ login, password });
+    assert.equal(await db.user.count({ where: { nickname: login } }), 1);
+    const agent = request.agent(app);
+    assert.equal(
+      (
+        await agent
+          .post("/api/auth/admin/login")
+          .send({ login: "NeonAlice", password: "secure-password-123" })
+      ).status,
+      401,
+    );
+    assert.equal(
+      (
+        await agent
+          .post("/api/auth/admin/login")
+          .send({ login, password: "incorrect" })
+      ).status,
+      401,
+    );
+    const response = await agent
+      .post("/api/auth/admin/login")
+      .send({ login, password });
+    assert.equal(response.status, 200, response.text);
+    assert.match(response.headers["set-cookie"][0], /Max-Age=28800/);
+    assert.equal((await agent.get("/api/admin")).status, 200);
+    await bootstrapAdmin({ login, password: password + "-rotated" });
+    assert.equal((await agent.get("/api/admin")).status, 401);
+    assert.equal(
+      (await agent.post("/api/auth/admin/login").send({ login, password }))
+        .status,
+      401,
+    );
+    assert.equal(
+      (
+        await agent
+          .post("/api/auth/admin/login")
+          .send({ login, password: password + "-rotated" })
+      ).status,
+      200,
+    );
+    assert.equal(
+      await db.adminAction.count({
+        where: { action: "rotate-admin-password", targetId: owner.id },
+      }),
+      1,
+    );
+  });
   test("admin role enforcement, audited idempotent grant and leaderboard", async () => {
     assert.equal((await a.get("/api/admin")).status, 403);
     await db.user.update({ where: { id: bid }, data: { role: "ADMIN" } });

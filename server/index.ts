@@ -23,6 +23,7 @@ import { day, week, claim, finish, present } from "./economy.js";
 import { seed } from "../prisma/seed.js";
 import { attachRooms } from "./rooms.js";
 import { publicError } from "./errors.js";
+import { bootstrapAdmin } from "./admin-bootstrap.js";
 process.env.APP_URL ||= process.env.RENDER_EXTERNAL_URL;
 export const app = express();
 app.set("trust proxy", process.env.NODE_ENV === "production" ? 1 : false);
@@ -156,6 +157,32 @@ app.post(
     )
       return res.status(401).json({ error: "Неверный никнейм или пароль" });
     await session(res, u.id);
+    res.json({ ok: true });
+  }),
+);
+app.post(
+  "/api/auth/admin/login",
+  authLimit,
+  wrap(async (req: any, res: any) => {
+    const v = z
+      .object({
+        login: z.string().min(3).max(20),
+        password: z.string().min(1).max(128),
+      })
+      .strict()
+      .parse(req.body);
+    const user = await db.user.findUnique({ where: { nickname: v.login } });
+    // Verify a hash even for unknown users, keeping the failure response generic.
+    const valid = await compare(
+      v.password,
+      user?.passwordHash ??
+        "$2b$12$C6UzMDM.H6dfI/f/IKcEe.kuqM0LXq8ILFG91nUU6zHKyUvEBy8ma",
+    );
+    if (!user || !valid || user.role !== "ADMIN" || user.guest || user.banned)
+      return res
+        .status(401)
+        .json({ error: "Неверный логин или пароль администратора" });
+    await session(res, user.id, 8 * 60 * 60 * 1000);
     res.json({ ok: true });
   }),
 );
@@ -1034,6 +1061,7 @@ if (process.env.NODE_ENV !== "test") {
   )
     throw Error("APP_URL HTTPS и IP_HASH_SECRET (32+) обязательны");
   await seed(db);
+  await bootstrapAdmin();
   await maintenance();
   server.listen(Number(process.env.PORT ?? 3000), "0.0.0.0", () =>
     console.log("NEON CASINO listening"),

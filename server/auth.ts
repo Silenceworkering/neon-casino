@@ -4,20 +4,24 @@ import { db } from "./db.js";
 export const hash = (value: string) =>
   createHash("sha256").update(value).digest("hex");
 export const token = () => randomBytes(32).toString("hex");
-export async function session(res: Response, userId: string) {
+export async function session(
+  res: Response,
+  userId: string,
+  maxAge = 30 * 86400000,
+) {
   const raw = token();
   await db.authSession.create({
     data: {
       id: hash(raw),
       userId,
-      expiresAt: new Date(Date.now() + 30 * 86400000),
+      expiresAt: new Date(Date.now() + maxAge),
     },
   });
   res.cookie("neon_session", raw, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
-    maxAge: 30 * 86400000,
+    maxAge,
     path: "/",
   });
 }
