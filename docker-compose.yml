@@ -1,0 +1,29 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: neon
+      POSTGRES_PASSWORD: neon-local-development
+      POSTGRES_DB: neon
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - neon-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U neon"]
+      interval: 5s
+      retries: 10
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://neon:neon-local-development@db:5432/neon
+      APP_URL: http://localhost:3000
+      NODE_ENV: development
+      IP_HASH_SECRET: local-development-change-before-publishing
+    depends_on:
+      db:
+        condition: service_healthy
+volumes:
+  neon-data:

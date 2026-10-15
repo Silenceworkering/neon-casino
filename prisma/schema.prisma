@@ -1,0 +1,268 @@
+generator client {
+  provider = "prisma-client-js"
+  engineType = "client"
+}
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+}
+model User {
+  id String @id @default(uuid())
+  nickname String @unique
+  passwordHash String
+  recoveryHash String
+  role String @default("USER")
+  guest Boolean @default(false)
+  banned Boolean @default(false)
+  createdAt DateTime @default(now())
+  profile Profile?
+  wallet Wallet?
+  sessions AuthSession[]
+  games GameSession[]
+  transactions WalletTransaction[]
+  achievements UserAchievement[]
+  quests UserQuest[]
+  inventory Inventory[]
+  notifications Notification[]
+  redemptions PromoRedemption[]
+  rewards DailyReward[]
+  participants TournamentParticipant[]
+  members RoomMember[]
+  @@index([createdAt])
+}
+model AuthSession {
+  id String @id
+  userId String
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  expiresAt DateTime
+  @@index([userId])
+  @@index([expiresAt])
+}
+model Profile {
+  userId String @id
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  avatar String @default("⚡")
+  bio String @default("")
+  xp Int @default(0)
+  prestige Int @default(0)
+  settings Json @default("{}")
+}
+model Wallet {
+  userId String @id
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  coins Int @default(10000)
+  crystals Int @default(0)
+}
+model WalletTransaction {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  key String
+  coins Int
+  crystals Int @default(0)
+  balanceAfter Int
+  reason String
+  createdAt DateTime @default(now())
+  @@unique([userId,key])
+  @@index([userId,createdAt])
+}
+model GameSession {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  game String
+  key String
+  bet Int
+  status String @default("ACTIVE")
+  state Json
+  commitment String
+  seed String
+  createdAt DateTime @default(now())
+  result GameResult?
+  @@unique([userId,key])
+  @@index([userId,status])
+  @@index([game,createdAt])
+}
+model GameResult {
+  id String @id @default(uuid())
+  sessionId String @unique
+  session GameSession @relation(fields:[sessionId],references:[id],onDelete:Cascade)
+  payout Int
+  details Json
+  createdAt DateTime @default(now())
+  @@index([createdAt])
+}
+model Achievement {
+  id String @id
+  title String
+  description String
+  target Int
+  crystals Int
+  users UserAchievement[]
+}
+model UserAchievement {
+  userId String
+  achievementId String
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  achievement Achievement @relation(fields:[achievementId],references:[id])
+  createdAt DateTime @default(now())
+  @@id([userId,achievementId])
+}
+model Quest {
+  id String @id
+  title String
+  period String
+  target Int
+  coins Int
+  users UserQuest[]
+}
+model UserQuest {
+  userId String
+  questId String
+  period String
+  progress Int @default(0)
+  claimed Boolean @default(false)
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  quest Quest @relation(fields:[questId],references:[id])
+  @@id([userId,questId,period])
+}
+model CosmeticItem {
+  id String @id
+  name String
+  kind String
+  value String
+  price Int
+  owners Inventory[]
+}
+model Inventory {
+  userId String
+  itemId String
+  equipped Boolean @default(false)
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  item CosmeticItem @relation(fields:[itemId],references:[id])
+  @@id([userId,itemId])
+}
+model Friendship {
+  id String @id @default(uuid())
+  senderId String
+  receiverId String
+  pair String @unique
+  status String @default("PENDING")
+  createdAt DateTime @default(now())
+  @@index([receiverId,status])
+  @@index([senderId,status])
+}
+model Notification {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  message String
+  read Boolean @default(false)
+  createdAt DateTime @default(now())
+  @@index([userId,createdAt])
+}
+model PromoCode {
+  code String @id
+  coins Int
+  crystals Int @default(0)
+  limit Int
+  uses Int @default(0)
+  expiresAt DateTime
+  redemptions PromoRedemption[]
+}
+model PromoRedemption {
+  userId String
+  code String
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  promo PromoCode @relation(fields:[code],references:[code])
+  createdAt DateTime @default(now())
+  @@id([userId,code])
+}
+model Tournament {
+  id String @id @default(uuid())
+  title String
+  startsAt DateTime
+  endsAt DateTime
+  reward Int
+  settled Boolean @default(false)
+  participants TournamentParticipant[]
+}
+model TournamentParticipant {
+  tournamentId String
+  userId String
+  score Int @default(0)
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  tournament Tournament @relation(fields:[tournamentId],references:[id])
+  @@id([tournamentId,userId])
+  @@index([tournamentId,score])
+}
+model Leaderboard {
+  id String @id
+  category String
+  entries Json
+  updatedAt DateTime @updatedAt
+}
+model AdminAction {
+  id String @id @default(uuid())
+  actorId String
+  action String
+  targetId String?
+  details Json
+  createdAt DateTime @default(now())
+  @@index([createdAt])
+}
+model DailyReward {
+  userId String
+  kind String
+  period String
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  createdAt DateTime @default(now())
+  @@id([userId,kind,period])
+}
+model GameRoom {
+  id String @id @default(uuid())
+  code String @unique
+  ownerId String
+  game String
+  status String @default("WAITING")
+  state Json @default("{}")
+  createdAt DateTime @default(now())
+  members RoomMember[]
+  @@index([status,createdAt])
+}
+model RoomMember {
+  roomId String
+  userId String
+  score Int @default(0)
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  room GameRoom @relation(fields:[roomId],references:[id],onDelete:Cascade)
+  @@id([roomId,userId])
+}
+model EconomyConfig {
+  id String @id @default("main")
+  daily Int @default(1000)
+  weekly Int @default(5000)
+  maxBet Int @default(10000)
+  minBet Int @default(10)
+}
+model Event {
+  id String @id @default(uuid())
+  title String
+  description String
+  startsAt DateTime
+  endsAt DateTime
+  coins Int
+}
+model RegistrationGuard {
+  ipHash String
+  day String
+  count Int @default(1)
+  @@id([ipHash,day])
+}
+model Referral {
+  referredId String @id
+  inviterId String
+  rewarded Boolean @default(false)
+  createdAt DateTime @default(now())
+  @@index([inviterId])
+}
