@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import {
@@ -67,11 +67,15 @@ function App() {
   const notify = useCallback((s: string) => {
     setToast(s);
   }, []);
+  const refreshVersion = useRef(0);
   const refresh = useCallback(async () => {
+    const version = ++refreshVersion.current;
     try {
-      setMe(await api("/me"));
-    } catch {
-      setMe(null);
+      const user = await api("/me");
+      if (version === refreshVersion.current) setMe(user);
+    } catch (e: any) {
+      if (e.status === 401 && version === refreshVersion.current) setMe(null);
+      // A transient connection error must not sign out the player.
     } finally {
       setLoading(false);
     }
@@ -100,7 +104,7 @@ function App() {
   const navigate = (p: Page) => {
     setPage(p);
     setGame(null);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.scrollTo({ top: 0, behavior: "instant" });
   };
   const need = () => {
     if (!me) {
@@ -122,7 +126,7 @@ function App() {
   async function run(fn: () => Promise<any>) {
     try {
       const result = await fn();
-      await refresh();
+      void refresh();
       return result;
     } catch (e: any) {
       notify(e.message);
@@ -1090,10 +1094,49 @@ function GameScreen({ game: g, sound, effects, onBack, run, notify }: any) {
         (Math.max(0, Date.now() - (s.startAt ?? Date.now())) / 1000) * 0.16,
       ) * 100,
     ) / 100;
+  const latestRound = useRef(round);
+  latestRound.current = round;
+  const actionPending = useRef(false);
+  const actionVersion = useRef(0);
+  const polling = useRef(false);
   useEffect(() => {
-    if (g.id === "crash" && round && !done && tick % 10 === 0 && !busy)
-      action({ type: "check" });
-  }, [tick]);
+    if (g.id !== "crash" || !round || done) return;
+    let cancelled = false;
+    const poll = async () => {
+      if (polling.current || actionPending.current) return;
+      polling.current = true;
+      const version = actionVersion.current;
+      try {
+        const result = await api(`/games/${round.id}/action`, {
+          key: key(),
+          action: { type: "check" },
+        });
+        if (
+          !cancelled &&
+          version === actionVersion.current &&
+          !actionPending.current &&
+          latestRound.current?.id === result.id &&
+          latestRound.current?.status === "ACTIVE" &&
+          result.status === "DONE"
+        ) {
+          latestRound.current = result;
+          setRound(result);
+          beep(result.result?.payout > result.bet);
+          // Refresh the wallet separately; never hold the cashout control for it.
+          void run(async () => result);
+        }
+      } catch {
+        // Background polling retries without changing manual control availability.
+      } finally {
+        polling.current = false;
+      }
+    };
+    const timer = setInterval(poll, 1000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [g.id, round?.id, done]);
   function beep(win: boolean) {
     if (!sound) return;
     try {
@@ -1111,13 +1154,21 @@ function GameScreen({ game: g, sound, effects, onBack, run, notify }: any) {
     } catch {}
   }
   async function execute(fn: () => Promise<any>) {
+    if (actionPending.current) return;
+    actionPending.current = true;
+    actionVersion.current++;
     setBusy(true);
-    const result = await run(fn);
-    if (result) {
-      setRound(result);
-      if (result.status === "DONE") beep(result.result?.payout > result.bet);
+    try {
+      const result = await run(fn);
+      if (result) {
+        latestRound.current = result;
+        setRound(result);
+        if (result.status === "DONE") beep(result.result?.payout > result.bet);
+      }
+    } finally {
+      actionPending.current = false;
+      setBusy(false);
     }
-    setBusy(false);
   }
   async function begin() {
     setHold([]);
@@ -1131,7 +1182,7 @@ function GameScreen({ game: g, sound, effects, onBack, run, notify }: any) {
     );
   }
   async function action(a: any) {
-    if (!round || busy) return;
+    if (!round || actionPending.current) return;
     await execute(() =>
       api(`/games/${round.id}/action`, { key: key(), action: a }),
     );
@@ -1406,11 +1457,12 @@ function GameScreen({ game: g, sound, effects, onBack, run, notify }: any) {
               )}
               {g.id === "crash" && (
                 <button
-                  className="primary"
+                  className="primary crash-cashout"
+                  aria-busy={busy}
                   disabled={busy}
                   onClick={() => action({ type: "cashout" })}
                 >
-                  Забрать ×{current.toFixed(2)}
+                  {busy ? "Забираем…" : `Забрать ×${current.toFixed(2)}`}
                 </button>
               )}
               <button

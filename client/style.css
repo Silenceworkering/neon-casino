@@ -4285,3 +4285,26 @@ html[data-effects="off"] .confetti {
     padding: 10px 12px;
   }
 }
+/* Tap feedback is immediate; network requests never add a second wallet wait. */
+button,
+a,
+input,
+select,
+textarea {
+  touch-action: manipulation;
+}
+button {
+  transition: none;
+}
+button:not(:disabled):active {
+  filter: brightness(1.15);
+}
+.primary.crash-cashout:disabled {
+  opacity: 1;
+  cursor: wait;
+  background: linear-gradient(110deg, #b578fa, #9455e7);
+  color: #fff;
+  box-shadow:
+    0 3px 20px #8c40d125,
+    inset 0 1px #ffffff25;
+}

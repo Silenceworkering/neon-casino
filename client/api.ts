@@ -6,6 +6,9 @@ export async function api(path: string, data?: unknown, method?: string) {
     body: data === undefined ? undefined : JSON.stringify(data),
   });
   const out = await r.json();
-  if (!r.ok) throw Error(out.error ?? "Ошибка соединения");
+  if (!r.ok)
+    throw Object.assign(new Error(out.error ?? "Ошибка соединения"), {
+      status: r.status,
+    });
   return out;
 }
